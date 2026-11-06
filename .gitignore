@@ -14,6 +14,7 @@
 # Code coverage profiles and other test artifacts
 *.out
 coverage.*
+coverage*.txt
 !coverage.go
 *.coverprofile
 profile.cov
@@ -31,3 +32,21 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local integration checkout
+go-naming-polarismesh/
+
+# Runtime artifacts
+*.log
+.DS_Store
+/e2e
+/.agents/
+/specs/
+
+# Real E2E run artifacts
+/examples/**/.build/
+/examples/**/.logs/
+/examples/**/polaris/
+/examples/**/.*-pids
+/examples/**/.polaris-cache/
+/examples/**/.skill-cache/

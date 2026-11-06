@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - feat/ai-registry
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out adapter
+        uses: actions/checkout@v4
+
+      - name: Check out go-naming-polarismesh
+        uses: actions/checkout@v4
+        with:
+          repository: trpc-ecosystem/go-naming-polarismesh
+          ref: feat/ai-registry
+          path: go-naming-polarismesh
+
+      - name: Check out polaris-go
+        uses: actions/checkout@v4
+        with:
+          repository: polarismesh/polaris-go
+          ref: feat/ai-registry
+          path: polaris-go
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: true
+
+      - name: Use branch dependency
+        run: |
+          go mod edit -replace=trpc.group/trpc-go/trpc-naming-polarismesh=./go-naming-polarismesh
+          go mod edit -replace=github.com/polarismesh/polaris-go=./polaris-go
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Validate example scripts
+        run: |
+          while IFS= read -r script; do
+            bash -n "$script"
+          done < <(find examples -type f -name '*.sh' -print)
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11.4
