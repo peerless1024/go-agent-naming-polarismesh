@@ -115,6 +115,11 @@ The Agent Runtime is deregistered, the A2A server is shut down, the AI_AGENT
 service is deleted, and the published Skill is deleted in `t.Cleanup`. The
 shared namespace is retained.
 
+Polaris versions that use second-granularity Skill cache timestamps require
+`create` and `publish` to cross a second boundary. The harness deliberately
+waits for the next publication window so the published status cannot be
+missed by the server's `mtime > last` incremental cache query.
+
 ## Run
 
 ```bash

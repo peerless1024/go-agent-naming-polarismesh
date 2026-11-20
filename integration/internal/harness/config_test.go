@@ -11,6 +11,7 @@ package harness
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -38,4 +39,17 @@ func TestValidateSkillOwnership(t *testing.T) {
 	require.ErrorContains(t, cfg.validateSkillOwnership(owned, "skill"), "identity")
 
 	require.ErrorContains(t, cfg.validateSkillOwnership(&consoleResponse{}, "skill"), "missing")
+}
+
+func TestSkillPublishNotBeforeCrossesSecondBoundary(t *testing.T) {
+	tests := []time.Time{
+		time.Date(2026, 11, 20, 16, 37, 27, 0, time.UTC),
+		time.Date(2026, 11, 20, 16, 37, 27, 999*int(time.Millisecond), time.UTC),
+	}
+	for _, now := range tests {
+		notBefore := skillPublishNotBefore(now)
+		require.True(t, notBefore.After(now))
+		require.Equal(t, time.Second, notBefore.Truncate(time.Second).Sub(now.Truncate(time.Second)))
+		require.Equal(t, 200*time.Millisecond, notBefore.Sub(notBefore.Truncate(time.Second)))
+	}
 }

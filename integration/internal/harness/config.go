@@ -285,6 +285,10 @@ POLARIS_SKILL_MARKER=%s
 		return fmt.Errorf("wait for created Skill: %w", err)
 	}
 	if !alreadyPublished {
+		// Older Polaris servers update the Skill cache with second-granularity
+		// mtime and use "mtime > last". Publishing in the same second as create
+		// can leave the cache permanently on the draft state.
+		time.Sleep(time.Until(skillPublishNotBefore(time.Now())))
 		response, err := c.consoleJSON(context.Background(), http.MethodPut, "/skill/v1/skills/publish", map[string]string{
 			"namespace": c.Namespace,
 			"name":      name,
@@ -342,6 +346,10 @@ POLARIS_SKILL_MARKER=%s
 		}
 		return nil
 	})
+}
+
+func skillPublishNotBefore(now time.Time) time.Time {
+	return now.Truncate(time.Second).Add(time.Second + 200*time.Millisecond)
 }
 
 func (c *Config) validateSkillOwnership(response *consoleResponse, name string) error {

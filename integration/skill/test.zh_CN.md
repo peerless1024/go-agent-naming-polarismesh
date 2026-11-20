@@ -109,6 +109,10 @@ protocol 为空。
 在 `t.Cleanup` 中反注册 Agent Runtime、关闭 A2A Server、删除 AI_AGENT
 服务并删除已发布 Skill；共享 namespace 保留。
 
+使用秒级 Skill 缓存时间戳的 Polaris 版本要求 `create` 与 `publish` 跨过一秒
+边界。测试会在发布前等待下一个时间窗口，避免服务端 `mtime > last` 增量缓存
+漏掉同一秒内的 published 状态更新。
+
 ## 运行
 
 ```bash
