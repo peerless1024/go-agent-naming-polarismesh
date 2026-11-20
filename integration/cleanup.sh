@@ -39,8 +39,9 @@ stop_retained_processes() {
         actual_start="$(ps -p "${pid}" -o lstart= 2>/dev/null | xargs || true)"
         actual_command="$(ps -p "${pid}" -o command= 2>/dev/null | xargs || true)"
         if [[ "${adopted}" == "true" ]]; then
-            if [[ "${actual_command}" != *"-tags=integration"* ||
-                "${actual_command}" != *"${RUN_ID}"* ]]; then
+            if [[ "${actual_command}" != *"${RUN_ID}"* ]] ||
+                { [[ "${actual_command}" != *"-tags=integration"* ]] &&
+                    [[ "${actual_command}" != *".test"* ]]; }; then
                 echo "stale adopted launchctl record ignored: pid=${pid}" >&2
                 continue
             fi

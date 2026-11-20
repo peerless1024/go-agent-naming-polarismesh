@@ -4,9 +4,10 @@ English | [Chinese](test.zh_CN.md)
 
 ## Integration Test Processes
 
-The integration package builds the example binaries into `t.TempDir()` and
-starts them as child processes. It does not invoke `examples/a2a-agentcard/verify.sh`.
-The `go test` process itself is the orchestrator and consumes Polaris through
+`make -C integration build` produces the example binaries before the test
+starts. The test only starts those prebuilt files as child processes and does
+not invoke `go build` or `examples/a2a-agentcard/verify.sh`. The
+`a2a-agentcard.test` process is the orchestrator and consumes Polaris through
 `ConsumerAPI`; the Polaris server is external.
 
 | Test | Child processes | Registered services |
@@ -129,9 +130,18 @@ Expected: no business listener is started, the card bytes in
 `ai-agent-card` exactly match the file, and only the configured registration
 port and instance fields are applied.
 
+## Run
+
+```bash
+make -C integration build
+POLARIS_SERVER=your-polaris-host \
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/a2a-agentcard.test" \
+  -test.count=1 -test.v -test.timeout=10m
+```
+
 ## Cleanup
 
-Integration tests follow the surrounding `go test` process. They deregister
+Integration tests follow the surrounding test binary process. They deregister
 instances and delete their run-scoped services through `t.Cleanup`.
 
 The manual example flow is independent: `verify.sh` does not stop its detached

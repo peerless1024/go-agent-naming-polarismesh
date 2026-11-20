@@ -11,7 +11,7 @@
 
 | 进程 | 数量 | 作用 |
 | --- | --- | --- |
-| `go test` 测试进程 | 1 | 启动 MCP Streamable HTTP Server、注册 metadata、采集并上报 Service Contract、发现实例并调用工具 |
+| 预构建测试二进制 | 1 | 启动 MCP Streamable HTTP Server、注册 metadata、采集并上报 Service Contract、发现实例并调用工具 |
 | MCP Server | 进程内 | 使用真实 `trpc-mcp-go` Streamable HTTP handler 和 loopback listener |
 | Polaris | 外部 | 通过 `POLARIS_SERVER` 提供，测试不启动 Polaris Server |
 
@@ -108,6 +108,8 @@ provider，并删除 MCP 服务及其 Contract；共享 namespace 保留。
 ## 运行
 
 ```bash
+make -C integration build
 POLARIS_SERVER=your-polaris-host \
-  go test -tags=integration -count=1 -v -timeout=10m ./integration/mcp
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/mcp.test" \
+  -test.count=1 -test.v -test.timeout=10m
 ```

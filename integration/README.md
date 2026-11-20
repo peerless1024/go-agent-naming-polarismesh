@@ -29,7 +29,7 @@ the adapter Pool. No LLM API key is required.
 
 ## Requirements
 
-- Go 1.21+.
+- Go 1.21+ on the machine that builds and packages the tests.
 - A reachable Polaris deployment.
 - Discovery gRPC, Console HTTP, and Skill gRPC endpoints.
 - Permission to create services, instances, and Skills in a non-`default`
@@ -53,6 +53,15 @@ Environment variables:
 
 ## Run
 
+Build every integration suite and AgentCard example before running:
+
+```bash
+make -C integration build
+```
+
+This writes `integration/bin/<os>-<arch>/`. Runtime scripts only execute these
+binaries; they do not call `go test` or `go build`.
+
 ```bash
 export POLARIS_SERVER=your-polaris-host
 bash integration/verify_all.sh
@@ -61,14 +70,16 @@ bash integration/verify_all.sh
 Run one suite:
 
 ```bash
+make -C integration build
 POLARIS_SERVER=your-polaris-host \
-  go test -tags=integration -count=1 -v -timeout=10m ./integration/a2a
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/a2a.test" \
+  -test.count=1 -test.v -test.timeout=10m
 ```
 
-Compile without a server:
+Build without a server:
 
 ```bash
-go test -tags=integration -run '^$' ./integration/...
+make -C integration build
 ```
 
 `verify_all.sh` also accepts:
@@ -79,7 +90,8 @@ go test -tags=integration -run '^$' ./integration/...
 | `--namespace=name` | Sets `POLARIS_E2E_NAMESPACE` |
 | `--run-id=id` | Sets `POLARIS_E2E_RUN_ID` |
 | `--timeout=30s` | Sets per-operation timeout |
-| `-v` | Verbose `go test` output |
+| `--bin-dir=DIR` | Uses a specific prebuilt binary directory |
+| `-v` | Verbose test output |
 
 ## Cloud Package
 
@@ -87,28 +99,34 @@ This repository provides only the packaging step. Upload, deployment,
 execution, and cleanup are owned by the cloud test workflow.
 
 ```bash
-./integration/build-materials.sh
-# Optional fully-vendored package:
-./integration/build-materials.sh --vendor
+# Build and package all tests for the cloud:
+make -C integration package TARGET=linux/amd64
+
+# Equivalent direct script:
+./integration/build-materials.sh --target=linux/amd64
 ```
 
-The default output is `integration/dist/go-agent-naming-integration.zip`. The
-archive contains the complete Go module, integration suites, examples used by
-the suites, `PACKAGE-INFO.txt`, and these cloud entrypoints:
+The binary package is
+`integration/dist/go-agent-naming-integration-linux-amd64-bin.zip`. It contains
+all integration test executables and the AgentCard provider/client examples,
+so the cloud machine does not need Go. The target OS/architecture must match
+the cloud machine. Binaries are statically built with `CGO_ENABLED=0`.
+
+The package contains the integration tree, `PACKAGE-INFO.txt`, `Makefile`, and
+these cloud entrypoints:
 
 - `integration/verify_all.sh`
 - `integration/run_retained.sh`
 - `integration/cleanup.sh`
 - `integration/pack-logs.sh`
 
-The cloud machine must already have Go 1.21+, `bash`, `curl`, `jq`, and
-`unzip`, plus network access to Polaris. Go module downloads are required
-unless the archive was built with `--vendor`.
+The cloud machine needs `bash`, `curl`, `jq`, and `unzip`, plus network access
+to Polaris. It does not need Go.
 
 After cloud-side unpacking, use the existing entrypoints:
 
 ```bash
-unzip go-agent-naming-integration.zip
+unzip go-agent-naming-integration-linux-amd64-bin.zip
 cd go-agent-naming-integration
 export POLARIS_SERVER=your-polaris-host
 bash integration/verify_all.sh --run-id cloud-verify-01

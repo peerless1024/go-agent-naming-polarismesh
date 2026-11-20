@@ -11,7 +11,7 @@
 
 | 进程 | 数量 | 作用 |
 | --- | --- | --- |
-| `go test` 测试进程 | 1 | 发布 Skill、通过 SkillAPI 安装、启动进程内 A2A Server、发现 Agent 并运行脚本化模型 |
+| 预构建测试二进制 | 1 | 发布 Skill、通过 SkillAPI 安装、启动进程内 A2A Server、发现 Agent 并运行脚本化模型 |
 | A2A Server | 进程内 | 在 loopback listener 上提供真实 A2A handler |
 | Polaris | 外部 | 通过 `POLARIS_SERVER` 提供发现、Console 和 Skill Registry |
 | LLM | 不使用 | 使用脚本化 `model.Model` 驱动真实 `llmagent` Skill 路径 |
@@ -112,6 +112,8 @@ protocol 为空。
 ## 运行
 
 ```bash
+make -C integration build
 POLARIS_SERVER=your-polaris-host \
-  go test -tags=integration -count=1 -v -timeout=10m ./integration/skill
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/skill.test" \
+  -test.count=1 -test.v -test.timeout=10m
 ```

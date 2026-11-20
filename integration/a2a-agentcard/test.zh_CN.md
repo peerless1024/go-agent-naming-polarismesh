@@ -4,9 +4,10 @@
 
 ## Integration 测试进程
 
-Integration 套件会把示例二进制构建到 `t.TempDir()`，再以子进程运行；不会调用
-`examples/a2a-agentcard/verify.sh`。`go test` 进程作为编排器，通过
-`ConsumerAPI` 访问北极星；北极星服务端为外部部署。
+测试启动前由 `make -C integration build` 生成示例二进制；测试只启动预构建文件，
+不会调用 `go build` 或 `examples/a2a-agentcard/verify.sh`。
+`a2a-agentcard.test` 进程作为编排器，通过 `ConsumerAPI` 访问北极星；北极星
+服务端为外部部署。
 
 | 测试 | 拉起的子进程 | 注册的服务 |
 | --- | --- | --- |
@@ -120,9 +121,18 @@ card endpoint 返回相同 JSON；三个调用返回统一的 Message 和
 预期：不启动业务 listener；`ai-agent-card` 与文件字节完全一致，只应用配置的
 registration port 和实例字段。
 
+## 运行
+
+```bash
+make -C integration build
+POLARIS_SERVER=your-polaris-host \
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/a2a-agentcard.test" \
+  -test.count=1 -test.v -test.timeout=10m
+```
+
 ## 清理
 
-Integration 测试跟随 `go test` 进程生命周期，在 `t.Cleanup` 中反注册实例并删除
+Integration 测试跟随测试二进制进程生命周期，在 `t.Cleanup` 中反注册实例并删除
 本轮的 run-scoped 服务。
 
 手工示例流程独立运行：`verify.sh` 不停止已分离的进程；

@@ -11,7 +11,7 @@ English | [Chinese](test.zh_CN.md)
 
 | Process | Count | Purpose |
 | --- | --- | --- |
-| `go test` test binary | 1 | Creates the Polaris Context, starts the in-process A2A HTTP listener, registers the provider instance, runs the consumer, and performs assertions |
+| Prebuilt test binary | 1 | Creates the Polaris Context, starts the in-process A2A HTTP listener, registers the provider instance, runs the consumer, and performs assertions |
 | A2A server | In-process | Uses the real HTTP handler and a loopback listener; no separate provider subprocess |
 | Polaris | External | Supplied by `POLARIS_SERVER`; the test does not start a Polaris server |
 
@@ -106,6 +106,8 @@ The provider is deregistered and the AI_AGENT service is deleted in
 ## Run
 
 ```bash
+make -C integration build
 POLARIS_SERVER=your-polaris-host \
-  go test -tags=integration -count=1 -v -timeout=10m ./integration/a2a
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/a2a.test" \
+  -test.count=1 -test.v -test.timeout=10m
 ```

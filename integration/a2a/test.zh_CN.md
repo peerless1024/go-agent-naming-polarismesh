@@ -11,7 +11,7 @@
 
 | 进程 | 数量 | 作用 |
 | --- | --- | --- |
-| `go test` 测试进程 | 1 | 创建 Polaris Context、启动进程内 A2A HTTP listener、注册 Provider、运行 Consumer 并执行断言 |
+| 预构建测试二进制 | 1 | 创建 Polaris Context、启动进程内 A2A HTTP listener、注册 Provider、运行 Consumer 并执行断言 |
 | A2A Server | 进程内 | 使用真实 HTTP handler 和 loopback listener，不启动独立 Provider 子进程 |
 | Polaris | 外部 | 通过 `POLARIS_SERVER` 提供，测试不启动 Polaris Server |
 
@@ -101,6 +101,8 @@ Provider 在 `t.Cleanup` 中反注册，AI_AGENT 服务随后删除；共享 nam
 ## 运行
 
 ```bash
+make -C integration build
 POLARIS_SERVER=your-polaris-host \
-  go test -tags=integration -count=1 -v -timeout=10m ./integration/a2a
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/a2a.test" \
+  -test.count=1 -test.v -test.timeout=10m
 ```

@@ -408,7 +408,9 @@ resources by run ID.
 
 The same integration tree can be packaged for a cloud test workflow with
 `integration/build-materials.sh`; upload, execution, and cleanup remain owned
-by the cloud environment. Tokens are never copied into the package.
+by the cloud environment. `make -C integration package TARGET=linux/amd64`
+builds every test and example binary before creating the package, so the cloud
+machine does not need Go. Tokens are never copied into the package.
 
 ## License
 

@@ -11,7 +11,7 @@ English | [Chinese](test.zh_CN.md)
 
 | Process | Count | Purpose |
 | --- | --- | --- |
-| `go test` test binary | 1 | Starts the MCP Streamable HTTP server, registers metadata, collects and reports the Service Contract, discovers the instance, and invokes the tool |
+| Prebuilt test binary | 1 | Starts the MCP Streamable HTTP server, registers metadata, collects and reports the Service Contract, discovers the instance, and invokes the tool |
 | MCP server | In-process | Uses the real `trpc-mcp-go` Streamable HTTP handler and a loopback listener |
 | Polaris | External | Supplied by `POLARIS_SERVER`; the test does not start a Polaris server |
 
@@ -113,6 +113,8 @@ provider is removed, and the MCP service and contracts are deleted in
 ## Run
 
 ```bash
+make -C integration build
 POLARIS_SERVER=your-polaris-host \
-  go test -tags=integration -count=1 -v -timeout=10m ./integration/mcp
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/mcp.test" \
+  -test.count=1 -test.v -test.timeout=10m
 ```

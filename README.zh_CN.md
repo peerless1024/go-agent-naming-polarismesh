@@ -363,7 +363,9 @@ bash integration/verify_all.sh
 按 run ID 清理资源。
 
 同一套 integration 代码可通过 `integration/build-materials.sh` 生成云测试包；
-上传、执行和清理由云环境负责，token 不进入部署包。
+`make -C integration package TARGET=linux/amd64` 会先构建全部测试和 example
+二进制再打包，云端无需安装 Go。上传、执行和清理由云环境负责，token 不进入
+部署包。
 
 ## 许可证
 

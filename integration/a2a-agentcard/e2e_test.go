@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,30 @@ import (
 	"github.com/polarismesh/polaris-go/pkg/model"
 	"trpc.group/trpc-go/trpc-agent-naming-polarismesh/integration/internal/harness"
 )
+
+func TestPrebuiltAgentCardExamples(t *testing.T) {
+	tests := []struct {
+		name   string
+		envKey string
+		binary string
+	}{
+		{
+			name:   "provider",
+			envKey: "POLARIS_E2E_AGENTCARD_PROVIDER_BIN",
+			binary: "agentcard-provider",
+		},
+		{
+			name:   "client",
+			envKey: "POLARIS_E2E_AGENTCARD_CLIENT_BIN",
+			binary: "agentcard-client",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			exampleBinary(t, test.envKey, test.binary)
+		})
+	}
+}
 
 func TestA2AAgentCardExampleAcrossProcesses(t *testing.T) {
 	cfg := harness.Load(t)
@@ -54,11 +79,12 @@ func TestA2AAgentCardExampleAcrossProcesses(t *testing.T) {
 		}
 	})
 
-	binDir := t.TempDir()
-	providerBinary := filepath.Join(binDir, "provider")
-	clientBinary := filepath.Join(binDir, "client")
-	buildExample(t, ctx, providerBinary, "./examples/a2a-agentcard/provider")
-	buildExample(t, ctx, clientBinary, "./examples/a2a-agentcard/client")
+	providerBinary := exampleBinary(
+		t, "POLARIS_E2E_AGENTCARD_PROVIDER_BIN", "agentcard-provider",
+	)
+	clientBinary := exampleBinary(
+		t, "POLARIS_E2E_AGENTCARD_CLIENT_BIN", "agentcard-client",
+	)
 
 	baseArgs := []string{
 		"-server", cfg.Server,
@@ -137,9 +163,9 @@ func TestAgentCardMultiProtocolProvider(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 
-	binDir := t.TempDir()
-	providerBinary := filepath.Join(binDir, "provider")
-	buildExample(t, ctx, providerBinary, "./examples/a2a-agentcard/provider")
+	providerBinary := exampleBinary(
+		t, "POLARIS_E2E_AGENTCARD_PROVIDER_BIN", "agentcard-provider",
+	)
 	baseArgs := []string{
 		"-server", cfg.Server,
 		"-polaris-port", strconv.Itoa(cfg.GRPCPort),
@@ -325,19 +351,29 @@ func runClient(
 	return output
 }
 
-func buildExample(t *testing.T, ctx context.Context, output, pkg string) {
+func exampleBinary(
+	t *testing.T,
+	envKey string,
+	name string,
+) string {
 	t.Helper()
-	goBinary := os.Getenv("GO_BIN")
-	if goBinary == "" {
-		goBinary = "go"
+	path := strings.TrimSpace(os.Getenv(envKey))
+	if path == "" {
+		target := runtime.GOOS + "-" + runtime.GOARCH
+		path = filepath.Join(exampleRoot(t), "integration", "bin", target, name)
 	}
-	command := exec.CommandContext(ctx, goBinary, "build", "-o", output, pkg)
-	command.Dir = exampleRoot(t)
-	command.Env = os.Environ()
-	raw, err := command.CombinedOutput()
+	absolute, err := filepath.Abs(path)
 	if err != nil {
-		t.Fatalf("build %s: %v\n%s", pkg, err, raw)
+		t.Fatalf("resolve %s: %v", envKey, err)
 	}
+	info, err := os.Stat(absolute)
+	if err != nil {
+		t.Fatalf("stat %s=%s: %v; run make -C integration build", envKey, absolute, err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+		t.Fatalf("%s=%s is not an executable file", envKey, absolute)
+	}
+	return absolute
 }
 
 func waitHealthyInstances(
@@ -402,14 +438,20 @@ func mustSDK(t *testing.T, cfg *harness.Config, enableSkill bool) api.SDKContext
 
 func exampleRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := os.Getwd()
 	if err != nil {
-		t.Fatalf("resolve repository root: %v", err)
+		t.Fatalf("resolve working directory: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
-		t.Fatalf("repository root %s does not contain go.mod: %v", root, err)
+	for {
+		if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
+			return root
+		}
+		parent := filepath.Dir(root)
+		if parent == root {
+			t.Fatalf("could not find repository root from working directory")
+		}
+		root = parent
 	}
-	return root
 }
 
 func withArgs(base []string, extra ...string) []string {

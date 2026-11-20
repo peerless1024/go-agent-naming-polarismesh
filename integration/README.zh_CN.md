@@ -26,7 +26,7 @@ LLM；`mcp` 直接通过适配层 Pool 调用 MCP 工具。因此整套测试不
 
 ## 前置条件
 
-- Go 1.21 或更新版本。
+- 编译和打包测试的机器需要 Go 1.21 或更新版本。
 - 可访问的北极星环境。
 - Discovery gRPC、Console HTTP 和 Skill gRPC 均可用。
 - 允许在非 `default` namespace 创建服务、实例和 Skill。
@@ -49,6 +49,15 @@ LLM；`mcp` 直接通过适配层 Pool 调用 MCP 工具。因此整套测试不
 
 ## 运行
 
+运行前先构建全部 integration 套件和 AgentCard example：
+
+```bash
+make -C integration build
+```
+
+产物位于 `integration/bin/<os>-<arch>/`。运行脚本只执行这些二进制，不会再调用
+`go test` 或 `go build`。
+
 ```bash
 export POLARIS_SERVER=your-polaris-host
 bash integration/verify_all.sh
@@ -57,14 +66,16 @@ bash integration/verify_all.sh
 只跑一个套件：
 
 ```bash
+make -C integration build
 POLARIS_SERVER=your-polaris-host \
-  go test -tags=integration -count=1 -v -timeout=10m ./integration/a2a
+  "integration/bin/$(go env GOOS)-$(go env GOARCH)/a2a.test" \
+  -test.count=1 -test.v -test.timeout=10m
 ```
 
-没有服务端时只编译：
+没有服务端时只构建：
 
 ```bash
-go test -tags=integration -run '^$' ./integration/...
+make -C integration build
 ```
 
 `verify_all.sh` 支持：
@@ -75,33 +86,40 @@ go test -tags=integration -run '^$' ./integration/...
 | `--namespace=name` | 设置 `POLARIS_E2E_NAMESPACE` |
 | `--run-id=id` | 设置 `POLARIS_E2E_RUN_ID` |
 | `--timeout=30s` | 设置单次操作超时 |
-| `-v` | 输出详细 `go test` 日志 |
+| `--bin-dir=DIR` | 指定预编译二进制目录 |
+| `-v` | 输出详细测试日志 |
 
 ## 云上部署包
 
 仓库只提供打包步骤；上传、部署、执行和清理由云测试流程负责。
 
 ```bash
-./integration/build-materials.sh
-# 可选：包含 vendor，避免云端下载依赖
-./integration/build-materials.sh --vendor
+# 构建并打包全部云端测试：
+make -C integration package TARGET=linux/amd64
+
+# 等价的直接脚本：
+./integration/build-materials.sh --target=linux/amd64
 ```
 
-默认输出为 `integration/dist/go-agent-naming-integration.zip`。压缩包包含完整
-Go module、integration 套件、套件依赖的 examples、`PACKAGE-INFO.txt`，以及：
+二进制包输出为
+`integration/dist/go-agent-naming-integration-linux-amd64-bin.zip`，包含全部
+integration test 可执行文件和 AgentCard provider/client，因此云端不需要安装
+Go。目标 OS/CPU 架构必须与云端一致；二进制使用 `CGO_ENABLED=0` 静态编译。
+
+压缩包包含 integration 目录、`PACKAGE-INFO.txt`、`Makefile`，以及：
 
 - `integration/verify_all.sh`
 - `integration/run_retained.sh`
 - `integration/cleanup.sh`
 - `integration/pack-logs.sh`
 
-云测试机需预装 Go 1.21+、`bash`、`curl`、`jq` 和 `unzip`，并能访问目标
-北极星。未使用 `--vendor` 时还需要拉取 Go module。
+云测试机需要 `bash`、`curl`、`jq` 和 `unzip`，并能访问目标北极星；不需要
+安装 Go。
 
 云端解包后直接使用现有入口：
 
 ```bash
-unzip go-agent-naming-integration.zip
+unzip go-agent-naming-integration-linux-amd64-bin.zip
 cd go-agent-naming-integration
 export POLARIS_SERVER=your-polaris-host
 bash integration/verify_all.sh --run-id cloud-verify-01
