@@ -36,9 +36,11 @@ func TestPublishedSkillInstallAndModelInjection(t *testing.T) {
 
 	skillName := cfg.Unique("skill")
 	marker := "marker-" + cfg.RunID
-	if err := cfg.CreatePublishedSkill(skillName, "1.0.0", marker); err != nil {
+	sdk, err := cfg.CreatePublishedSkill(skillName, "1.0.0", marker)
+	if err != nil {
 		t.Fatalf("publish Skill: %v", err)
 	}
+	t.Cleanup(sdk.Destroy)
 	t.Cleanup(func() {
 		if err := cfg.DeleteSkill(skillName); err != nil {
 			t.Logf("delete Skill %s: %v", skillName, err)
@@ -61,12 +63,6 @@ func TestPublishedSkillInstallAndModelInjection(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = listener.Close() })
 	port := listener.Addr().(*net.TCPAddr).Port
-
-	sdk, err := cfg.SDK(true)
-	if err != nil {
-		t.Fatalf("create Polaris SDK: %v", err)
-	}
-	t.Cleanup(sdk.Destroy)
 
 	cfgProvider := adapterconfig.DefaultConfig()
 	cfgProvider.Namespace = cfg.Namespace

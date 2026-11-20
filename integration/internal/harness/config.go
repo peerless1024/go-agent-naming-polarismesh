@@ -130,6 +130,8 @@ func (c *Config) SDK(enableSkill bool) (api.SDKContext, error) {
 		cfg.GetSkill().SetAddresses([]string{c.SkillAddress()})
 		cfg.GetSkill().SetConnectTimeout(c.RequestTimeout)
 		cfg.GetSkill().SetMessageTimeout(c.RequestTimeout)
+		cfg.GetSkill().SetPersistEnable(false)
+		cfg.GetSkill().SetFallbackToLocalCache(false)
 		if c.SkillToken != "" {
 			cfg.GetSkill().SetToken(c.SkillToken)
 		}
@@ -189,9 +191,24 @@ func (c *Config) DeleteService(service string, serviceType model.ServiceType) er
 	})
 }
 
-// CreatePublishedSkill creates and publishes a multi-file Skill, then waits
-// until the real Skill data plane can read and download it.
-func (c *Config) CreatePublishedSkill(name, version, marker string) error {
+// CreatePublishedSkill creates and publishes a multi-file Skill, then returns
+// an SDK connection verified against a Skill data-plane instance that can read
+// and download it. The caller owns and must destroy the returned SDK context.
+func (c *Config) CreatePublishedSkill(name, version, marker string) (api.SDKContext, error) {
+	var verifiedSDK api.SDKContext
+	if err := c.createPublishedSkill(name, version, marker, &verifiedSDK); err != nil {
+		return nil, err
+	}
+	if verifiedSDK == nil {
+		return nil, errors.New("verified Skill SDK is nil")
+	}
+	return verifiedSDK, nil
+}
+
+func (c *Config) createPublishedSkill(
+	name, version, marker string,
+	verifiedSDK *api.SDKContext,
+) error {
 	payload := map[string]any{
 		"namespace":   c.Namespace,
 		"name":        name,
@@ -314,22 +331,26 @@ POLARIS_SKILL_MARKER=%s
 			}
 		}
 	}
-	sdk, err := c.SDK(true)
-	if err != nil {
-		return err
-	}
-	defer sdk.Destroy()
-	skills := api.NewSkillAPIByContext(sdk)
 	return Eventually(context.Background(), c.RequestTimeout, 250*time.Millisecond, func() error {
+		// A load-balanced Skill endpoint can expose replicas with different
+		// cache freshness. Keep only the SDK that can read and download the
+		// published package, then reuse it for the Runtime under test.
+		sdk, err := c.SDK(true)
+		if err != nil {
+			return err
+		}
+		skills := api.NewSkillAPIByContext(sdk)
 		resource, err := skills.GetSkill(&api.GetSkillRequest{GetSkillRequest: model.GetSkillRequest{
 			Namespace: c.Namespace,
 			Name:      name,
 			Version:   version,
 		}})
 		if err != nil {
+			sdk.Destroy()
 			return err
 		}
 		if resource == nil || resource.Name != name || resource.Namespace != c.Namespace {
+			sdk.Destroy()
 			return errors.New("skill identity is not visible")
 		}
 		pkg, err := skills.DownloadSkill(&api.SkillDownloadRequest{SkillDownloadRequest: model.SkillDownloadRequest{
@@ -339,11 +360,14 @@ POLARIS_SKILL_MARKER=%s
 			Format:    model.SkillFormatZIP,
 		}})
 		if err != nil {
+			sdk.Destroy()
 			return err
 		}
 		if pkg == nil || len(pkg.Content) == 0 {
+			sdk.Destroy()
 			return errors.New("skill ZIP is not visible")
 		}
+		*verifiedSDK = sdk
 		return nil
 	})
 }

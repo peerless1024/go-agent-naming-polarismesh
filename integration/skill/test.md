@@ -120,6 +120,11 @@ Polaris versions that use second-granularity Skill cache timestamps require
 waits for the next publication window so the published status cannot be
 missed by the server's `mtime > last` incremental cache query.
 
+If the Skill endpoint load-balances multiple replicas with different cache
+freshness, the harness opens a fresh SDK per verification attempt and keeps the
+first connection that can both read and download the Skill. The provider
+Runtime reuses that verified connection for installation.
+
 ## Run
 
 ```bash
