@@ -13,11 +13,22 @@ Contributions are welcome through GitHub issues and pull requests.
 
 ## Pull requests
 
-- Write the title, description, source comments, and Go documentation in English.
+- Write code, source comments, commit messages, pull-request text, and the
+  primary Markdown documentation in English. Keep Chinese `*.zh_CN.md`
+  counterparts in sync when a guide is maintained in both languages.
 - Describe the problem, resulting behavior, and validation performed.
 - Format Go code with `gofmt` and include tests for behavior changes.
-- Once Go modules are added, run the relevant module's `go test ./...` before
-  submitting code changes. Document any checks that could not be run.
+- Run `go mod tidy`, `go build ./...`, `go vet ./...`, and `go test ./...`
+  before submitting code changes. Use `go test -race -count=1 ./...` for
+  concurrency, cancellation, or lifecycle changes. Document any check that
+  could not be run.
+- When changing A2A, MCP, Skill, AgentCard registration, discovery, or cleanup,
+  also run the relevant real-service suite from `integration/`. Use
+  `integration/verify_all.sh` with a reachable `POLARIS_SERVER`, and document
+  the run ID, result, and cleanup outcome.
+- Keep `examples/` focused on user-facing runnable flows. Put comprehensive
+  failure-path and lifecycle verification in `integration/`; keep English and
+  `*.zh_CN.md` guidance synchronized.
 - Use the prefix of the affected package in the title when applicable, for example
   `agentcard: validate endpoint metadata`.
 

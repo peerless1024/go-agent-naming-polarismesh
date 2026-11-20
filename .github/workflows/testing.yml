@@ -1,0 +1,70 @@
+name: Testing
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "release/*"
+  pull_request:
+    branches:
+      - main
+      - "feat/**"
+      - "release/*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testing-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out adapter
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify module files
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Run unit tests with race detector and coverage
+        run: |
+          go test -race -count=1 -timeout=15m \
+            -covermode=atomic \
+            -coverprofile=coverage.txt \
+            ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Validate example and integration scripts
+        run: |
+          while IFS= read -r script; do
+            bash -n "$script"
+          done < <(find examples integration -type f -name '*.sh' -print)
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        continue-on-error: true
+        with:
+          files: ./coverage.txt
+          flags: adapter
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
