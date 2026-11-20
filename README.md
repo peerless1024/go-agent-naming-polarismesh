@@ -406,6 +406,10 @@ and environment variables.
 For a killed run, [`integration/cleanup.sh`](integration/cleanup.sh) removes
 resources by run ID.
 
+The same integration tree can be packaged for a cloud test workflow with
+`integration/build-materials.sh`; upload, execution, and cleanup remain owned
+by the cloud environment. Tokens are never copied into the package.
+
 ## License
 
 Copyright (C) 2026 Tencent. All rights reserved.

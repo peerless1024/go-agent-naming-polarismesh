@@ -227,14 +227,48 @@ POLARIS_SKILL_MARKER=%s
 			},
 		},
 	}
-	response, err := c.consoleJSON(context.Background(), http.MethodPost, "/skill/v1/skills", payload)
+	query := url.Values{"namespace": {c.Namespace}, "name": {name}, "version": {version}}
+	existing, err := c.consoleJSON(
+		context.Background(),
+		http.MethodGet,
+		"/skill/v1/skills?"+query.Encode(),
+		nil,
+	)
 	if err != nil {
 		return err
 	}
-	if response.Code != 200000 && response.Code != 400201 {
-		return fmt.Errorf("create Skill code=%d info=%s", response.Code, response.Info)
+	alreadyPublished := false
+	switch existing.Code {
+	case 200000:
+		if err := c.validateSkillOwnership(existing, name); err != nil {
+			return err
+		}
+		alreadyPublished = skillVersionActive(existing, version)
+	case 400202:
+		response, err := c.consoleJSON(context.Background(), http.MethodPost, "/skill/v1/skills", payload)
+		if err != nil {
+			return err
+		}
+		if response.Code != 200000 && response.Code != 400201 {
+			// A concurrent or previous attempt may have inserted the same
+			// namespace/name/version after the preflight query.
+			owned, queryErr := c.consoleJSON(
+				context.Background(),
+				http.MethodGet,
+				"/skill/v1/skills?"+query.Encode(),
+				nil,
+			)
+			if queryErr != nil || owned.Code != 200000 {
+				return fmt.Errorf("create Skill code=%d info=%s", response.Code, response.Info)
+			}
+			if err := c.validateSkillOwnership(owned, name); err != nil {
+				return err
+			}
+			alreadyPublished = skillVersionActive(owned, version)
+		}
+	default:
+		return fmt.Errorf("query existing Skill code=%d info=%s", existing.Code, existing.Info)
 	}
-	query := url.Values{"namespace": {c.Namespace}, "name": {name}, "version": {version}}
 	if err := Eventually(context.Background(), c.RequestTimeout, 200*time.Millisecond, func() error {
 		item, err := c.consoleJSON(context.Background(), http.MethodGet, "/skill/v1/skills?"+query.Encode(), nil)
 		if err != nil {
@@ -250,17 +284,31 @@ POLARIS_SKILL_MARKER=%s
 	}); err != nil {
 		return fmt.Errorf("wait for created Skill: %w", err)
 	}
-	response, err = c.consoleJSON(context.Background(), http.MethodPut, "/skill/v1/skills/publish", map[string]string{
-		"namespace": c.Namespace,
-		"name":      name,
-		"version":   version,
-		"comment":   "integration test",
-	})
-	if err != nil {
-		return err
-	}
-	if response.Code != 200000 && response.Code != 200002 {
-		return fmt.Errorf("publish Skill code=%d info=%s", response.Code, response.Info)
+	if !alreadyPublished {
+		response, err := c.consoleJSON(context.Background(), http.MethodPut, "/skill/v1/skills/publish", map[string]string{
+			"namespace": c.Namespace,
+			"name":      name,
+			"version":   version,
+			"comment":   "integration test",
+		})
+		if err != nil {
+			return err
+		}
+		if response.Code != 200000 && response.Code != 200002 {
+			current, queryErr := c.consoleJSON(
+				context.Background(),
+				http.MethodGet,
+				"/skill/v1/skills?"+query.Encode(),
+				nil,
+			)
+			if queryErr != nil || current.Code != 200000 ||
+				!skillVersionActive(current, version) {
+				return fmt.Errorf("publish Skill code=%d info=%s", response.Code, response.Info)
+			}
+			if err := c.validateSkillOwnership(current, name); err != nil {
+				return err
+			}
+		}
 	}
 	sdk, err := c.SDK(true)
 	if err != nil {
@@ -296,6 +344,33 @@ POLARIS_SKILL_MARKER=%s
 	})
 }
 
+func (c *Config) validateSkillOwnership(response *consoleResponse, name string) error {
+	if response == nil || response.Resource == nil {
+		return errors.New("existing Skill resource is missing")
+	}
+	resource := response.Resource
+	if resource.Name != name || resource.Namespace != c.Namespace {
+		return fmt.Errorf(
+			"existing Skill identity is %s/%s, want %s/%s",
+			resource.Namespace, resource.Name, c.Namespace, name,
+		)
+	}
+	if resource.Ext[ownerKey] != owner || resource.Ext[runIDKey] != c.RunID {
+		return fmt.Errorf(
+			"existing Skill %s/%s is not owned by this run",
+			c.Namespace, name,
+		)
+	}
+	return nil
+}
+
+func skillVersionActive(response *consoleResponse, version string) bool {
+	return response != nil &&
+		response.Resource != nil &&
+		response.Resource.VersionInfo != nil &&
+		response.Resource.VersionInfo.ActiveVersion == version
+}
+
 // DeleteSkill removes every version of a Skill owned by this run.
 func (c *Config) DeleteSkill(name string) error {
 	query := url.Values{"namespace": {c.Namespace}, "name": {name}}
@@ -327,9 +402,21 @@ func (c *Config) ensureNamespace(ctx context.Context) error {
 	return nil
 }
 
+type skillResource struct {
+	Name        string            `json:"name"`
+	Namespace   string            `json:"namespace"`
+	Ext         map[string]string `json:"ext"`
+	VersionInfo *skillVersionInfo `json:"versionInfo"`
+}
+
+type skillVersionInfo struct {
+	ActiveVersion string `json:"activeVersion"`
+}
+
 type consoleResponse struct {
-	Code uint32 `json:"code"`
-	Info string `json:"info"`
+	Code     uint32         `json:"code"`
+	Info     string         `json:"info"`
+	Resource *skillResource `json:"resource"`
 }
 
 func (c *Config) consoleJSON(

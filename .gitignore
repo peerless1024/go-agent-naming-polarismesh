@@ -58,3 +58,4 @@ go-naming-polarismesh/
 /integration/**/.polaris-cache/
 /integration/**/.skill-cache/
 /integration/.retained/
+/integration/dist/

@@ -362,6 +362,9 @@ bash integration/verify_all.sh
 测试进程被中断时，可用 [`integration/cleanup.sh`](integration/cleanup.sh)
 按 run ID 清理资源。
 
+同一套 integration 代码可通过 `integration/build-materials.sh` 生成云测试包；
+上传、执行和清理由云环境负责，token 不进入部署包。
+
 ## 许可证
 
 Copyright (C) 2026 Tencent. All rights reserved.

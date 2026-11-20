@@ -81,6 +81,63 @@ go test -tags=integration -run '^$' ./integration/...
 | `--timeout=30s` | Sets per-operation timeout |
 | `-v` | Verbose `go test` output |
 
+## Cloud Package
+
+This repository provides only the packaging step. Upload, deployment,
+execution, and cleanup are owned by the cloud test workflow.
+
+```bash
+./integration/build-materials.sh
+# Optional fully-vendored package:
+./integration/build-materials.sh --vendor
+```
+
+The default output is `integration/dist/go-agent-naming-integration.zip`. The
+archive contains the complete Go module, integration suites, examples used by
+the suites, `PACKAGE-INFO.txt`, and these cloud entrypoints:
+
+- `integration/verify_all.sh`
+- `integration/run_retained.sh`
+- `integration/cleanup.sh`
+- `integration/pack-logs.sh`
+
+The cloud machine must already have Go 1.21+, `bash`, `curl`, `jq`, and
+`unzip`, plus network access to Polaris. Go module downloads are required
+unless the archive was built with `--vendor`.
+
+After cloud-side unpacking, use the existing entrypoints:
+
+```bash
+unzip go-agent-naming-integration.zip
+cd go-agent-naming-integration
+export POLARIS_SERVER=your-polaris-host
+bash integration/verify_all.sh --run-id cloud-verify-01
+
+# Or retain selected suites:
+bash integration/run_retained.sh \
+  --run-id cloud-inspect-01 \
+  --suite=a2a,mcp,skill,a2a-agentcard
+
+# Package logs for return to the local machine:
+bash integration/pack-logs.sh --run-id cloud-verify-01
+
+# Cloud-side cleanup:
+bash integration/cleanup.sh \
+  --run-id <run-id> \
+  --delete-service \
+  --force \
+  --polaris-server "$POLARIS_SERVER"
+```
+
+`verify_all.sh` writes `integration/.logs/<run-id>.log`.
+`run_retained.sh` writes `integration/.retained/<run-id>/`.
+`pack-logs.sh` collects both into
+`integration/dist/go-agent-naming-logs-<run-id>.tar.gz`, adds run metadata, and
+excludes retained token env files.
+
+Polaris tokens must be configured on the cloud machine. No token or access
+URL is embedded by `build-materials.sh`.
+
 ## Retain Processes and Resources
 
 Use the retained runner when services, Skills, or provider processes must stay
@@ -96,6 +153,8 @@ POLARIS_SERVER=your-polaris-host \
 Each selected suite runs in a detached process and blocks in keep mode after
 its checks succeed. The run ID and retained process manifest are stored below
 `integration/.retained/<run-id>/`. This command never performs cleanup.
+Re-running the same run ID and suite reuses an existing KEEP job and an
+already-published owned Skill; use a fresh run ID for an independent run.
 
 Stop retained processes and delete the run-scoped remote resources together:
 

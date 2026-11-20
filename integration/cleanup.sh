@@ -21,12 +21,30 @@ stop_retained_processes() {
     local label pid _log _test expected_start expected_command actual_start actual_command
     while IFS=$'\t' read -r label pid _log _test expected_start expected_command; do
         [[ "${label}" == "label" || -z "${pid}" ]] && continue
+        local adopted=false
+        if [[ -n "${label}" ]] && command -v launchctl >/dev/null 2>&1; then
+            local launch_pid
+            launch_pid="$(launchctl list 2>/dev/null | awk -v label="${label}" '$3 == label {print $1}')"
+            if [[ -n "${launch_pid}" && "${launch_pid}" != "-" && "${launch_pid}" != "${pid}" ]]; then
+                pid="${launch_pid}"
+                adopted=true
+            fi
+        fi
         if ! kill -0 "${pid}" 2>/dev/null; then
+            if [[ -n "${label}" ]] && command -v launchctl >/dev/null 2>&1; then
+                launchctl remove "${label}" >/dev/null 2>&1 || true
+            fi
             continue
         fi
         actual_start="$(ps -p "${pid}" -o lstart= 2>/dev/null | xargs || true)"
         actual_command="$(ps -p "${pid}" -o command= 2>/dev/null | xargs || true)"
-        if [[ "${actual_start}" != "${expected_start}" ||
+        if [[ "${adopted}" == "true" ]]; then
+            if [[ "${actual_command}" != *"-tags=integration"* ||
+                "${actual_command}" != *"${RUN_ID}"* ]]; then
+                echo "stale adopted launchctl record ignored: pid=${pid}" >&2
+                continue
+            fi
+        elif [[ "${actual_start}" != "${expected_start}" ||
             "${actual_command}" != "${expected_command}" ]]; then
             echo "stale retained record ignored: pid=${pid}" >&2
             continue

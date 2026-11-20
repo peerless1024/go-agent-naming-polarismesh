@@ -116,7 +116,6 @@ start_process() {
         return 0
     fi
     local ready="${log}.ready"
-    rm -f "${ready}"
     local quoted_args=""
     local arg
     for arg in "$@"; do
@@ -131,12 +130,29 @@ start_process() {
         local existing_pid
         existing_pid="$(launchctl list 2>/dev/null | awk -v label="${label}" '$3 == label {print $1}')"
         if [[ -n "${existing_pid}" && "${existing_pid}" != "-" ]]; then
-            echo "launchctl job ${label} is already running (pid=${existing_pid})" >&2
+            if grep -q '^KEEP:' "${log}" 2>/dev/null; then
+                start="$(ps -p "${existing_pid}" -o lstart= 2>/dev/null | xargs || true)"
+                command_line="$(ps -p "${existing_pid}" -o command= 2>/dev/null | xargs || true)"
+                if [[ -z "${start}" || -z "${command_line}" ]]; then
+                    echo "cannot record existing retained process ${label} (pid=${existing_pid})" >&2
+                    return 1
+                fi
+                if ! awk -F '\t' -v label="${label}" -v pid="${existing_pid}" \
+                    '$1 == label && $2 == pid {found=1} END {exit !found}' "${MANIFEST}"; then
+                    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+                        "${label}" "${existing_pid}" "${log}" "$*" "${start}" "${command_line}" >> "${MANIFEST}"
+                fi
+                printf '%s\n' "${RUN_ID}" > "${ready}"
+                printf '%s|%s\n' "${name}" "${existing_pid}"
+                return 0
+            fi
+            echo "launchctl job ${label} is already running without KEEP (pid=${existing_pid})" >&2
             return 1
         fi
         if [[ "${existing_pid}" == "-" ]]; then
             launchctl remove "${label}" >/dev/null 2>&1 || true
         fi
+        rm -f "${ready}"
         if ! launchctl submit -l "${label}" -- /bin/bash -lc "${command}" >/dev/null 2>&1; then
             echo "launchctl submit failed for ${name}" >&2
             return 1
@@ -154,6 +170,7 @@ start_process() {
             return 1
         fi
     else
+        rm -f "${ready}"
         nohup bash -lc "${command}" </dev/null >/dev/null 2>&1 &
         pid=$!
     fi

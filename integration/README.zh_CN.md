@@ -77,6 +77,60 @@ go test -tags=integration -run '^$' ./integration/...
 | `--timeout=30s` | 设置单次操作超时 |
 | `-v` | 输出详细 `go test` 日志 |
 
+## 云上部署包
+
+仓库只提供打包步骤；上传、部署、执行和清理由云测试流程负责。
+
+```bash
+./integration/build-materials.sh
+# 可选：包含 vendor，避免云端下载依赖
+./integration/build-materials.sh --vendor
+```
+
+默认输出为 `integration/dist/go-agent-naming-integration.zip`。压缩包包含完整
+Go module、integration 套件、套件依赖的 examples、`PACKAGE-INFO.txt`，以及：
+
+- `integration/verify_all.sh`
+- `integration/run_retained.sh`
+- `integration/cleanup.sh`
+- `integration/pack-logs.sh`
+
+云测试机需预装 Go 1.21+、`bash`、`curl`、`jq` 和 `unzip`，并能访问目标
+北极星。未使用 `--vendor` 时还需要拉取 Go module。
+
+云端解包后直接使用现有入口：
+
+```bash
+unzip go-agent-naming-integration.zip
+cd go-agent-naming-integration
+export POLARIS_SERVER=your-polaris-host
+bash integration/verify_all.sh --run-id cloud-verify-01
+
+# 或保留指定套件：
+bash integration/run_retained.sh \
+  --run-id cloud-inspect-01 \
+  --suite=a2a,mcp,skill,a2a-agentcard
+
+# 打包日志回传本地分析：
+bash integration/pack-logs.sh --run-id cloud-verify-01
+
+# 云端清理：
+bash integration/cleanup.sh \
+  --run-id <run-id> \
+  --delete-service \
+  --force \
+  --polaris-server "$POLARIS_SERVER"
+```
+
+`verify_all.sh` 会将输出同时写入 `integration/.logs/<run-id>.log`；
+`run_retained.sh` 使用 `integration/.retained/<run-id>/`；
+`pack-logs.sh` 汇总两者到
+`integration/dist/go-agent-naming-logs-<run-id>.tar.gz`，附加运行元数据，
+并排除包含 token 的 retained env 文件。
+
+北极星 token 必须在云测试机配置；`build-materials.sh` 不会写入 token 或
+access-bearing URL。
+
 ## 保留进程和资源
 
 需要在断言通过后继续检查服务、Skill 或 Provider 进程时，使用 retained
@@ -91,7 +145,8 @@ POLARIS_SERVER=your-polaris-host \
 
 每个选中的套件在独立分离进程中运行，断言成功后进入 keep 模式并保持阻塞。
 run ID 和进程 manifest 保存在 `integration/.retained/<run-id>/`。该命令不会
-自动清理。
+自动清理。使用相同 run ID 和套件重跑时，会复用已有 KEEP job 和已发布且
+归属本轮的 Skill；独立运行应使用新的 run ID。
 
 统一停止 retained 进程并删除本轮远端资源：
 
